@@ -102,3 +102,49 @@ export const logoutUser = (req, res) => {
 		res.status(500).json({ error: "Internal Server Error" });
 	}
 };
+export const forgotPassword = async (req,res)=>{
+// router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = Date.now() + 3600000;
+    await user.save();
+
+    const resetLink = `http://localhost:3000/reset-password/${token}`;
+    await sendEmail(email, "Password Reset", `Click to reset: ${resetLink}`);
+
+    res.json({ message: "Password reset link sent" });
+  } catch (err) {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Reset Password
+export const resetPassword =async (req,res)=>{
+// router.post("/reset-password/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { newPassword } = req.body;
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) return res.status(400).json({ error: "Invalid or expired token" });
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+    user.password = hashed;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ message: "Password reset successful" });
+  } catch (err) {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
